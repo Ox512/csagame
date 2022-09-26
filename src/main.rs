@@ -19,14 +19,13 @@ fn main() {
         .add_plugin(TilemapPlugin)
         .add_startup_system(camera::setup_camera)
         .add_startup_system(world::setup_world)
+        .add_startup_system(setup)
         .add_system(camera::move_camera)
         .run();
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // Camera
 
-    /*
     // Entity
     let entity_sprite = asset_server.load("Entity.png");
     commands.spawn_bundle(SpriteBundle {
@@ -38,7 +37,6 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         },
         ..Default::default()
     });
-    */
 
     /*let mut world = world::World::new(None, 200, 128);
 

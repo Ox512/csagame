@@ -256,7 +256,7 @@ pub fn setup_world(mut commands: Commands, asset_server: Res<AssetServer>) {
         tile_size,
         grid_size,
         texture: TilemapTexture(texture_handle),
-        transform: get_centered_transform_2d(&tm_size, &tile_size, 1.0),
+        transform: get_tilemap_center_transform(&tm_size, &grid_size, 1.0),
         ..Default::default()
     });
 }

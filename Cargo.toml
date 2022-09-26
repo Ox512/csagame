@@ -10,4 +10,4 @@ bevy = "0.8"
 noise = "0.7.0"
 rand = "0.8.5"
 rand_seeder = "0.2.3"
-bevy_ecs_tilemap = "0.7.0"
+bevy_ecs_tilemap = {git = "https://github.com/StarArawn/bevy_ecs_tilemap"}
