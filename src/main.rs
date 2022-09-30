@@ -1,12 +1,17 @@
+#![feature(let_chains)]
+
 pub mod camera;
+pub mod terrain;
 pub mod tile;
-pub mod world;
 
 use bevy::{prelude::*, render::texture::ImageSettings};
 use bevy_ecs_tilemap::TilemapPlugin;
 
+use camera::*;
+use terrain::bevy_connect::setup_world;
+
 fn main() {
-    let app = App::new()
+    let _app = App::new()
         .insert_resource(ClearColor(Color::rgb(0.5, 0.7, 1.0)))
         .insert_resource(ImageSettings::default_nearest())
         .insert_resource(WindowDescriptor {
@@ -17,15 +22,14 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_plugin(TilemapPlugin)
-        .add_startup_system(camera::setup_camera)
-        .add_startup_system(world::setup_world)
-        .add_startup_system(setup)
+        .add_startup_system(setup_camera)
+        .add_startup_system(setup_world)
+        //.add_startup_system(setup)
         .add_system(camera::move_camera)
         .run();
 }
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-
     // Entity
     let entity_sprite = asset_server.load("Entity.png");
     commands.spawn_bundle(SpriteBundle {
@@ -37,17 +41,4 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         },
         ..Default::default()
     });
-
-    /*let mut world = world::World::new(None, 200, 128);
-
-    world.generate(GenerationSettings::FOREST);
-
-    println!(
-        "World: x:{} y:{}",
-        world.tile_data.len(),
-        world.tile_data[0].len()
-    );
-
-    println!("{}", world.to_string());
-    */
 }

@@ -1245,6 +1245,7 @@ version = "0.1.0"
 dependencies = [
  "bevy",
  "bevy_ecs_tilemap",
+ "bitflags",
  "noise",
  "rand 0.8.5",
  "rand_seeder",
