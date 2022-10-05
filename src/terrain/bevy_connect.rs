@@ -4,6 +4,7 @@
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 
+use crate::terrain::layer::*;
 use crate::terrain::settings::*;
 use crate::terrain::*;
 use crate::tile::TILESET_SIZE;
@@ -16,13 +17,15 @@ impl Terrain {
         &self,
         commands: &mut Commands,
         asset_server: &Res<AssetServer>,
-        layer: Layer,
+        layer: usize,
     ) {
         // Create atlas out of desired tileset
         let atlas = {
-            let mut handle;
-            if layer == Layer::Foreground {
+            let handle;
+            if layer == Layer::FRONT {
                 handle = asset_server.load("Tiles.png");
+            } else if layer == Layer::MIDDLE {
+                handle = asset_server.load("MiddlegroundTiles.png");
             } else {
                 handle = asset_server.load("BackgroundTiles.png");
             }
@@ -34,6 +37,10 @@ impl Terrain {
                 TILESET_SIZE.1 as usize,
             )
         };
+
+        // Tiles in the MIDDLE layer are shifted down by
+        // 2 pixels so that they connect nicely to FRONT tiles
+        let offset = if layer == Layer::MIDDLE { -2.0 } else { 0.0 };
 
         let tm_size = TilemapSize {
             x: self.width,
@@ -56,8 +63,8 @@ impl Terrain {
                         position: pos,
                         tilemap_id: TilemapId(tm_entity),
                         texture: TileTexture(get_texture_index(
-                            self.get_tile_unchecked(x, y, layer),
-                            Some(self.get_surrounds(x, y, layer)),
+                            self.layers[layer].get_tile(x, y),
+                            Some(self.layers[layer].get_surrounds(x, y)),
                         )),
                         ..Default::default()
                     })
@@ -67,13 +74,18 @@ impl Terrain {
             }
         }
 
+        let mut transform =
+            get_tilemap_center_transform(&tm_size, &GRID_SIZE, -(layer as usize as f32));
+
+        transform.translation.y += offset;
+
         // Add the tilemap to bevy
         commands.entity(tm_entity).insert_bundle(TilemapBundle {
             tile_size: TILE_SIZE,
             grid_size: GRID_SIZE,
             size: tm_size,
             texture: TilemapTexture(atlas.texture),
-            transform: get_tilemap_center_transform(&tm_size, &GRID_SIZE, -(layer as usize as f32)),
+            transform,
             ..Default::default()
         });
     }
@@ -85,6 +97,8 @@ pub fn setup_world(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut terrain = Terrain::new(None, DEFAULT_SIZE.0, DEFAULT_SIZE.1);
 
     terrain.generate(GenerationSettings::FOREST);
-    terrain.spawn_layer_tilemap(&mut commands, &asset_server, Layer::Foreground);
-    terrain.spawn_layer_tilemap(&mut commands, &asset_server, Layer::Background);
+
+    for i in 0..Layer::TOTAL_LAYERS {
+        terrain.spawn_layer_tilemap(&mut commands, &asset_server, i)
+    }
 }

@@ -1,3 +1,5 @@
+pub mod multi_tile;
+
 use bitflags::bitflags;
 
 // All tiles present in the game
@@ -5,13 +7,14 @@ use bitflags::bitflags;
 pub enum Tile {
     Null, // Should never be present
     Air,
-    Regular(RegularTile),
+    Ground(GroundTile),
     Background(BackgroundTile),
+    Decor(DecorTile),
 }
 
-// Regular (block/square) tiles
+// Ground (block/square) tiles
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-pub enum RegularTile {
+pub enum GroundTile {
     Grass,
     Dirt,
     Stone,
@@ -22,6 +25,13 @@ pub enum RegularTile {
 pub enum BackgroundTile {
     Dirt,
     Stone,
+}
+
+// Decoration tiles
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub enum DecorTile {
+    GrassSmall,
+    GrassMedium(u32, u32),
 }
 
 // Info about the tiles surrounding a tile. This is stored as a u8 as it is useful for indexing
@@ -36,8 +46,8 @@ bitflags! {
         const TL = 0b00000001; // Top left
         const TM = 0b00000010; // Top middle
         const TR = 0b00000100; // Top right
-        const ML = 0b00001_000; // Middle left
-        const MR = 0b00010_000; // Middle right
+        const ML = 0b00001_000; // Decor left
+        const MR = 0b00010_000; // Decor right
         const BL = 0b00100_000; // Bottom left
         const BM = 0b01_000_000; // Bottom middle
         const BR = 0b10_000_000; // Bottom right
@@ -59,19 +69,20 @@ impl Surrounds {
 
 pub const TILESET_SIZE: (u32, u32) = (22, 16);
 
+// Takes a tile and determines the index of it's texture
 pub fn get_texture_index(tile: &Tile, surrounds: Option<Surrounds>) -> u32 {
     match tile {
         // Non-regular tiles are handled manually
         Tile::Null => TILESET_SIZE.0 * TILESET_SIZE.1 - 1,
         Tile::Air => TILESET_SIZE.0 * TILESET_SIZE.1 - 2,
 
-        // Regular tiles need to have their surrounds taken into account
-        Tile::Regular(t) => {
+        // Ground tiles need to have their surrounds taken into account
+        Tile::Ground(t) => {
             // Top left coner of texture array
             let mut offset = match t {
-                RegularTile::Dirt => 0,
-                RegularTile::Grass => 3 * TILESET_SIZE.0,
-                RegularTile::Stone => 6 * TILESET_SIZE.0,
+                GroundTile::Dirt => 0,
+                GroundTile::Grass => 3 * TILESET_SIZE.0,
+                GroundTile::Stone => 6 * TILESET_SIZE.0,
             };
 
             // Offset into array based of surroundings
@@ -97,6 +108,11 @@ pub fn get_texture_index(tile: &Tile, surrounds: Option<Surrounds>) -> u32 {
 
             offset
         }
+
+        Tile::Decor(t) => match t {
+            DecorTile::GrassSmall => TILESET_SIZE.0,
+            DecorTile::GrassMedium(x, y) => 1 + TILESET_SIZE.0 - y * TILESET_SIZE.0 + x,
+        },
     }
 }
 

@@ -1,23 +1,17 @@
 pub mod bevy_connect;
+pub mod layer;
 pub mod settings;
 
 use noise::{Fbm, MultiFractal, NoiseFn, Seedable, Value};
 use rand_seeder::{rand_core::RngCore, Seeder, SipRng};
 
-use crate::terrain;
+use crate::terrain::layer::*;
 use crate::terrain::settings::*;
+use crate::tile::multi_tile::*;
 use crate::tile::*;
 
 pub const DEFAULT_SEED: &str = "Delpha 7";
 pub const DEFAULT_SIZE: (u32, u32) = (128 * 5, 128);
-
-type TileData = Vec<Vec<Tile>>;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Layer {
-    Foreground = 0,
-    Background = 1,
-}
 
 #[derive(Default)]
 pub struct Terrain {
@@ -26,12 +20,12 @@ pub struct Terrain {
     seed: String,
 
     // TileData arrays for each layer
-    tile_data: [TileData; 2],
+    layers: [Layer; 3],
 }
 
 impl Terrain {
     pub fn new(seed: Option<String>, width: u32, height: u32) -> Self {
-        let mut world = Terrain {
+        let mut out = Terrain {
             width,
             height,
             ..Default::default()
@@ -39,48 +33,16 @@ impl Terrain {
 
         // Use set seed if present
         if let Some(seed) = seed {
-            world.seed = seed
+            out.seed = seed
         } else {
-            world.seed = DEFAULT_SEED.to_string();
+            out.seed = DEFAULT_SEED.to_string();
         }
 
-        world.tile_data[0] = world.empty_tile_data();
-        world.tile_data[1] = world.empty_tile_data();
-
-        world
-    }
-
-    // Return a ref to a tile (no bound checking is done)
-    pub fn get_tile_unchecked(&self, x: u32, y: u32, layer: Layer) -> &Tile {
-        &self.tile_data[layer as usize][x as usize][y as usize]
-    }
-
-    // Return a mutable ref to a tile (no bound checking is done)
-    pub fn get_tile_mut_unchecked(&mut self, x: u32, y: u32, layer: Layer) -> &mut Tile {
-        &mut self.tile_data[layer as usize][x as usize][y as usize]
-    }
-
-    // The following two functions take an isize instead of a u32, this is
-    // for cases such as x - 1, which could be negative, the functions
-    // check for negatives and return None. isize is used as it can fit
-    // the whole range of u32
-
-    // Return a ref to a tile (bound checked)
-    pub fn get_tile(&self, x: isize, y: isize, layer: Layer) -> Option<&Tile> {
-        if x >= 0 && x < self.width as isize && y >= 0 && y < self.height as isize {
-            Some(&self.tile_data[layer as usize][x as usize][y as usize])
-        } else {
-            None
+        for i in 0..Layer::TOTAL_LAYERS {
+            out.layers[i] = Layer::new(width, height)
         }
-    }
 
-    // Return a mutable ref to a tile (bound checked)
-    pub fn get_tile_mut(&mut self, x: isize, y: isize, layer: Layer) -> Option<&mut Tile> {
-        if x >= 0 && x < self.width as isize && y >= 0 && y < self.height as isize {
-            Some(&mut self.tile_data[layer as usize][x as usize][y as usize])
-        } else {
-            None
-        }
+        out
     }
 
     // Displays the world in a text format
@@ -89,16 +51,17 @@ impl Terrain {
 
         for y in (0..self.height).rev() {
             for x in 0..self.width {
-                match self.get_tile_unchecked(x, y, Layer::Foreground) {
+                match self.layers[Layer::FRONT].get_tile(x, y) {
                     Tile::Null => out.push('E'),
 
                     Tile::Air => out.push(' '),
-                    Tile::Regular(RegularTile::Grass) => out.push('w'),
-                    Tile::Regular(RegularTile::Dirt) => out.push('x'),
-                    Tile::Regular(RegularTile::Stone) => out.push('□'),
+                    Tile::Ground(GroundTile::Grass) => out.push('w'),
+                    Tile::Ground(GroundTile::Dirt) => out.push('x'),
+                    Tile::Ground(GroundTile::Stone) => out.push('□'),
 
-                    // Don't print background tiles
+                    // Don't print background tiles or middle ground tiles
                     Tile::Background(_) => (),
+                    Tile::Decor(_) => (),
                 }
             }
             out.push('\n');
@@ -138,26 +101,27 @@ impl Terrain {
                         * settings.caves.solid_density
                         * settings.caves.falloff;
 
-                if y <= max_height && value.get([x as f64, y as f64]) as f32 >= solid_density {
-                    *self.get_tile_mut_unchecked(x, y, Layer::Foreground) =
-                        Tile::Regular(RegularTile::Stone);
+                if y < max_height && value.get([x as f64, y as f64]) as f32 >= solid_density {
+                    *self.layers[Layer::FRONT].get_tile_mut(x, y) = Tile::Ground(GroundTile::Stone);
+                } else if y == max_height {
+                    *self.layers[Layer::FRONT].get_tile_mut(x, y) = Tile::Ground(GroundTile::Stone);
                 } else {
-                    *self.get_tile_mut_unchecked(x, y, Layer::Foreground) = Tile::Air;
+                    *self.layers[Layer::FRONT].get_tile_mut(x, y) = Tile::Air;
                 }
 
                 // Generate background slightly below terrain
                 if y <= max_height - settings.background_offset {
-                    *self.get_tile_mut_unchecked(x, y, Layer::Background) =
+                    *self.layers[Layer::BACK].get_tile_mut(x, y) =
                         Tile::Background(BackgroundTile::Stone);
                 } else {
-                    *self.get_tile_mut_unchecked(x, y, Layer::Background) = Tile::Air;
+                    *self.layers[Layer::BACK].get_tile_mut(x, y) = Tile::Air;
                 }
             }
         }
 
         // Cellular automata smoothening
         for _ in 0..settings.caves.smooth_iters {
-            self.tile_data[Layer::Foreground as usize] = self.smooth(settings.caves.convert_min);
+            self.layers[Layer::FRONT] = self.smooth(settings.caves.convert_min);
         }
 
         // Dirt
@@ -174,25 +138,26 @@ impl Terrain {
                     as u32;
 
                 if y >= stone_height {
-                    if *self.get_tile_unchecked(x, y, Layer::Foreground) != Tile::Air {
-                        *self.get_tile_mut_unchecked(x, y, Layer::Foreground) =
-                            Tile::Regular(RegularTile::Dirt);
+                    if *self.layers[Layer::FRONT].get_tile(x, y) != Tile::Air {
+                        *self.layers[Layer::FRONT].get_tile_mut(x, y) =
+                            Tile::Ground(GroundTile::Dirt);
                     }
 
-                    if *self.get_tile_mut_unchecked(x, y, Layer::Background) != Tile::Air {
-                        *self.get_tile_mut_unchecked(x, y, Layer::Background) =
+                    if *self.layers[Layer::BACK].get_tile_mut(x, y) != Tile::Air {
+                        *self.layers[Layer::BACK].get_tile_mut(x, y) =
                             Tile::Background(BackgroundTile::Dirt)
                     }
                 }
             }
         }
 
-        // Grass
+        // Grass and Greenery decor
         for x in 0..self.width {
             for y in (0..self.height).rev() {
-                if *self.get_tile_unchecked(x, y, Layer::Foreground) != Tile::Air {
-                    *self.get_tile_mut_unchecked(x, y, Layer::Foreground) =
-                        Tile::Regular(RegularTile::Grass);
+                if *self.layers[Layer::FRONT].get_tile(x, y) != Tile::Air {
+                    *self.layers[Layer::FRONT].get_tile_mut(x, y) = Tile::Ground(GroundTile::Grass);
+
+                    self.generate_multi_tile(MultiTile::GrassMedium, x, y + 1);
 
                     // Move onto next column
                     break;
@@ -201,83 +166,36 @@ impl Terrain {
         }
     }
 
-    // Creates an initialized array able to store tile data
-    fn empty_tile_data(&self) -> TileData {
-        let mut out = Vec::with_capacity(self.width as usize);
-        for x in 0..self.width {
-            out.push(Vec::with_capacity(self.height as usize));
+    // Generates a multi_tile structure
+    fn generate_multi_tile(&mut self, multi: MultiTile, x: u32, y: u32) {
+        let info = &MULTI_TILES[multi as usize];
 
-            for _ in 0..self.height {
-                out[x as usize].push(Tile::Null);
+        for i in 0..info.width {
+            for j in 0..info.height {
+                *self.layers[Layer::MIDDLE].get_tile_mut(x + i, y + j) = match multi {
+                    MultiTile::GrassMedium => Tile::Decor(DecorTile::GrassMedium(i, j)),
+                }
             }
         }
-
-        out
-    }
-
-    pub fn get_surrounds(&self, x: u32, y: u32, layer: Layer) -> Surrounds {
-        let mut surrounds = Surrounds::empty();
-
-        // TL
-        if let Some(t) = self.get_tile(x as isize - 1, y as isize + 1, layer) && *t != Tile::Air {
-                surrounds.toggle(Surrounds::TL)
-        }
-
-        // TM
-        if let Some(t) = self.get_tile(x as isize, y as isize + 1, layer) && *t != Tile::Air {
-            surrounds.toggle(Surrounds::TM)
-        }
-
-        // TR
-        if let Some(t) = self.get_tile(x as isize + 1, y as isize + 1, layer) && *t != Tile::Air {
-            surrounds.toggle(Surrounds::TR)
-        }
-
-        // ML
-        if let Some(t) = self.get_tile(x as isize - 1, y as isize, layer) && *t != Tile::Air {
-            surrounds.toggle(Surrounds::ML)
-        }
-
-        // MR
-        if let Some(t) = self.get_tile(x as isize + 1, y as isize, layer) && *t != Tile::Air {
-            surrounds.toggle(Surrounds::MR)
-        }
-
-        // BL
-        if let Some(t) = self.get_tile(x as isize - 1, y as isize - 1, layer) && *t != Tile::Air {
-            surrounds.toggle(Surrounds::BL)
-        }
-
-        // BM
-        if let Some(t) = self.get_tile(x as isize, y as isize - 1, layer) && *t != Tile::Air {
-            surrounds.toggle(Surrounds::BM)
-        }
-
-        // BR
-        if let Some(t) = self.get_tile(x as isize + 1, y as isize - 1, layer) && *t != Tile::Air {
-            surrounds.toggle(Surrounds::BR)
-        }
-
-        surrounds
     }
 
     // Smooth out randomly generated noise by making each tile more similar to it's neighbour
     // Stores the result of the smooth in out to prevent tile_data from being corrupted in use
-    fn smooth(&self, conv_min: u32) -> TileData {
-        let mut out = self.empty_tile_data();
+    fn smooth(&self, conv_min: u32) -> Layer {
+        let mut output = Layer::new(self.width, self.height);
 
         for x in 0..self.width {
             for y in 0..self.height {
-                let w_count = self.get_surrounds(x, y, Layer::Foreground).count();
+                let w_count = self.layers[Layer::FRONT].get_surrounds(x, y).count();
 
                 if w_count >= conv_min {
-                    out[x as usize][y as usize] = Tile::Regular(RegularTile::Stone)
+                    *output.get_tile_mut(x, y) = Tile::Ground(GroundTile::Stone)
                 } else if w_count < conv_min {
-                    out[x as usize][y as usize] = Tile::Air
+                    *output.get_tile_mut(x, y) = Tile::Air
                 }
             }
         }
 
-        out
+        output
     }
 }
