@@ -1247,6 +1247,8 @@ dependencies = [
  "bevy_ecs_tilemap",
  "bitflags",
  "noise",
+ "num-derive",
+ "num-traits",
  "rand 0.8.5",
  "rand_seeder",
 ]

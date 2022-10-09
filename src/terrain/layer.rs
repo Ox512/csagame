@@ -1,3 +1,4 @@
+use crate::surrounds::*;
 use crate::tile::*;
 
 #[derive(Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -22,7 +23,7 @@ impl Layer {
             tiles.push(Vec::with_capacity(height as usize));
 
             for _ in 0..height {
-                tiles[x as usize].push(Tile::Null);
+                tiles[x as usize].push(Tile::NULL);
             }
         }
 
@@ -66,42 +67,42 @@ impl Layer {
         let mut surrounds = Surrounds::empty();
 
         // TL
-        if let Some(t) = self.get_tile_checked(x as isize - 1, y as isize + 1) && *t != Tile::Air {
+        if let Some(t) = self.get_tile_checked(x as isize - 1, y as isize + 1) && t.id != TileId::Empty {
                 surrounds.toggle(Surrounds::TL)
         }
 
         // TM
-        if let Some(t) = self.get_tile_checked(x as isize, y as isize + 1) && *t != Tile::Air {
+        if let Some(t) = self.get_tile_checked(x as isize, y as isize + 1) && t.id != TileId::Empty {
             surrounds.toggle(Surrounds::TM)
         }
 
         // TR
-        if let Some(t) = self.get_tile_checked(x as isize + 1, y as isize + 1) && *t != Tile::Air {
+        if let Some(t) = self.get_tile_checked(x as isize + 1, y as isize + 1) && t.id != TileId::Empty {
             surrounds.toggle(Surrounds::TR)
         }
 
         // ML
-        if let Some(t) = self.get_tile_checked(x as isize - 1, y as isize) && *t != Tile::Air {
+        if let Some(t) = self.get_tile_checked(x as isize - 1, y as isize) && t.id != TileId::Empty {
             surrounds.toggle(Surrounds::ML)
         }
 
         // MR
-        if let Some(t) = self.get_tile_checked(x as isize + 1, y as isize) && *t != Tile::Air {
+        if let Some(t) = self.get_tile_checked(x as isize + 1, y as isize) && t.id != TileId::Empty {
             surrounds.toggle(Surrounds::MR)
         }
 
         // BL
-        if let Some(t) = self.get_tile_checked(x as isize - 1, y as isize - 1) && *t != Tile::Air {
+        if let Some(t) = self.get_tile_checked(x as isize - 1, y as isize - 1) && t.id != TileId::Empty {
             surrounds.toggle(Surrounds::BL)
         }
 
         // BM
-        if let Some(t) = self.get_tile_checked(x as isize, y as isize - 1) && *t != Tile::Air {
+        if let Some(t) = self.get_tile_checked(x as isize, y as isize - 1) && t.id != TileId::Empty {
             surrounds.toggle(Surrounds::BM)
         }
 
         // BR
-        if let Some(t) = self.get_tile_checked(x as isize + 1, y as isize - 1) && *t != Tile::Air {
+        if let Some(t) = self.get_tile_checked(x as isize + 1, y as isize - 1) && t.id != TileId::Empty {
             surrounds.toggle(Surrounds::BR)
         }
 

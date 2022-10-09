@@ -12,3 +12,5 @@ rand = "0.8.5"
 rand_seeder = "0.2.3"
 bevy_ecs_tilemap = {git = "https://github.com/StarArawn/bevy_ecs_tilemap"}
 bitflags = "1.3.2"
+num-traits = "0.2.15"
+num-derive = "0.3.3"

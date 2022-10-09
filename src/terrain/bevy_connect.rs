@@ -62,10 +62,7 @@ impl Terrain {
                     .insert_bundle(TileBundle {
                         position: pos,
                         tilemap_id: TilemapId(tm_entity),
-                        texture: TileTexture(get_texture_index(
-                            self.layers[layer].get_tile(x, y),
-                            Some(self.layers[layer].get_surrounds(x, y)),
-                        )),
+                        texture: TileTexture(self.layers[layer].get_tile(x, y).get_texture_index()),
                         ..Default::default()
                     })
                     .id();
@@ -94,9 +91,14 @@ impl Terrain {
 // Generate a tilemap with a randomly generated world
 pub fn setup_world(mut commands: Commands, asset_server: Res<AssetServer>) {
     // Generate world
-    let mut terrain = Terrain::new(None, DEFAULT_SIZE.0, DEFAULT_SIZE.1);
+    let mut terrain = Terrain::new(
+        None,
+        GenerationSettings::FOREST,
+        DEFAULT_SIZE.0,
+        DEFAULT_SIZE.1,
+    );
 
-    terrain.generate(GenerationSettings::FOREST);
+    terrain.generate();
 
     for i in 0..Layer::TOTAL_LAYERS {
         terrain.spawn_layer_tilemap(&mut commands, &asset_server, i)

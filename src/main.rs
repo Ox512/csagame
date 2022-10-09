@@ -1,6 +1,7 @@
 #![feature(let_chains)]
 
 pub mod camera;
+pub mod surrounds;
 pub mod terrain;
 pub mod tile;
 

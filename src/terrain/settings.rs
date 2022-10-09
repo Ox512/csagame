@@ -1,8 +1,12 @@
+use std::ops::Range;
+
 #[derive(Default)]
 pub struct GenerationSettings {
     pub surface: SurfaceSettings,
     pub caves: CaveSettings,
-    pub stone_height: f32,
+    pub decor: DecorSettings,
+    pub trees: TreeSettings,
+    pub dirt_height: f32,
     pub stone_blur: u32,
     pub stone_jitter: u32,
     pub background_offset: u32,
@@ -26,7 +30,18 @@ impl GenerationSettings {
             falloff: 2.3,
         },
 
-        stone_height: 0.60,
+        decor: DecorSettings {
+            surface: 0..4,
+            surface_rate: 0.125,
+        },
+
+        trees: TreeSettings {
+            trunk_height_range: 3..5,
+            trunk_variants: 5,
+            spawn_rate: 0.125,
+        },
+
+        dirt_height: 0.60,
         stone_blur: 18,
         stone_jitter: 3,
         background_offset: 4,
@@ -51,4 +66,17 @@ pub struct CaveSettings {
     pub smooth_iters: u32,  // (0; 8] No. of times to smooth cave gen
     pub convert_min: u32,   // [0; 8] No. of like neighbours required to convert a tile
     pub falloff: f32,
+}
+
+#[derive(Default)]
+pub struct DecorSettings {
+    pub surface: Range<usize>, // Single tile decor
+    pub surface_rate: f32,
+}
+
+#[derive(Default)]
+pub struct TreeSettings {
+    pub trunk_height_range: Range<u32>, // Possible sizes of tree trunks
+    pub trunk_variants: u32,            // Different trunk tile variants
+    pub spawn_rate: f32,
 }
