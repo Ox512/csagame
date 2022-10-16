@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 use crate::surrounds::*;
 use crate::tile::*;
 
@@ -7,6 +9,10 @@ pub struct Layer {
 
     pub width: u32,
     pub height: u32,
+
+    // Iterator control values
+    x: u32,
+    y: u32,
 }
 
 impl Layer {
@@ -31,6 +37,8 @@ impl Layer {
             tiles,
             width,
             height,
+            x: 0,
+            y: 0,
         }
     }
 

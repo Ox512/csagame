@@ -40,7 +40,7 @@ impl Terrain {
 
         // Tiles in the MIDDLE layer are shifted down by
         // 2 pixels so that they connect nicely to FRONT tiles
-        let offset = if layer == Layer::MIDDLE { -2.0 } else { 0.0 };
+        let offset = if layer == Layer::MIDDLE { -3.0 } else { 0.0 };
 
         let tm_size = TilemapSize {
             x: self.width,

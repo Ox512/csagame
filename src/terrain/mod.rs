@@ -11,7 +11,7 @@ use crate::terrain::layer::*;
 use crate::terrain::settings::*;
 use crate::tile::*;
 
-pub const DEFAULT_SEED: &str = "B0RK3D";
+pub const DEFAULT_SEED: &str = "7";
 pub const DEFAULT_SIZE: (u32, u32) = (128 * 5, 128);
 
 pub struct Terrain {
@@ -194,7 +194,7 @@ impl Terrain {
         let mut x = 4;
 
         // While loop is used as the iterator needs to be advanced in loop
-        while x < self.width - 4 {
+        while x < self.width - 1 {
             // Skip if tree should not be generated here
             if self.value.get([x as f64, 2 as f64]) <= self.settings.trees.spawn_rate as f64 {
                 x += 1;
@@ -207,19 +207,31 @@ impl Terrain {
                     continue;
                 }
 
-                self.generate_tree(x, y + 1);
-                x += 5;
+                // Check the left and right side of the tile for edges
+                if *self.layers[Layer::FRONT].get_tile(x - 1, y) == Tile::EMPTY
+                    || *self.layers[Layer::FRONT].get_tile(x + 1, y) == Tile::EMPTY
+                {
+                    x += 1;
+                    break;
+                };
+
+                if let Some(_) = self.generate_tree(x, y + 1) {
+                    x += 5;
+                } else {
+                    x += 1;
+                }
+
                 break;
             }
         }
 
-        // Surface decor
-        let mut x = 0;
+        // Surface decor - start at one to avoid placing at the world's edge
+        let mut x = 1;
 
         // While loop is used as the iterator needs to be advanced in loop
         while x < self.width - 1 {
             // Skip if decor should not be generated here
-            if self.value.get([x as f64, 1 as f64]) <= self.settings.decor.surface_rate as f64 {
+            if self.value.get([x as f64, 1 as f64]) < self.settings.decor.surface_rate as f64 {
                 x += 1;
                 continue;
             }
@@ -230,8 +242,15 @@ impl Terrain {
                     continue;
                 }
 
-                // Check that this space hasn't already been taken
-                if *self.layers[Layer::MIDDLE].get_tile(x, y + 1) != Tile::EMPTY {
+                // Decor doesn't look great on the edge of terrain,
+                // So this is checked throughout this loop
+
+                // x .  -> This looks ugly when tiled
+                // x x
+                // x x x
+
+                // Check the left side of the tile for edges
+                if *self.layers[Layer::FRONT].get_tile(x - 1, y) == Tile::EMPTY {
                     x += 1;
                     break;
                 }
@@ -248,38 +267,54 @@ impl Terrain {
 
                 let desc = TileDescriptor::from_id(tile);
 
+                // TODO: rewrite this with if let Some =
+
                 // Single width tiles can be directly placed
                 if desc.dimensions.is_none() {
+                    // Check the right side of the tile for edges
+                    if *self.layers[Layer::FRONT].get_tile(x + 1, y) == Tile::EMPTY {
+                        x += 1;
+                        break;
+                    }
+
+                    if *self.layers[Layer::MIDDLE].get_tile(x, y + 1) != Tile::EMPTY {
+                        x += 1;
+                        break;
+                    }
+
                     *self.layers[Layer::MIDDLE].get_tile_mut(x, y + 1) = Tile::new(tile, None);
                     x += 1;
                     break;
                 }
 
-                // For multi tiles, we need to check there is enough ground to fit them
-                // and that they they won't be obsructed
-                let mut suitable = true;
-                for w in 1..desc.dimensions.unwrap().0 {
-                    if *self.layers[Layer::FRONT].get_tile(x + w, y) == Tile::EMPTY {
-                        suitable = false;
-                    }
-
-                    if *self.layers[Layer::FRONT].get_tile(x + w, y + 1) != Tile::EMPTY {
-                        suitable = false;
-                    }
-
-                    if *self.layers[Layer::MIDDLE].get_tile(x + w, y + 1) != Tile::EMPTY {
-                        suitable = false;
-                    }
-                }
-
-                if !suitable {
+                // Check the right side of the multi tile for edges
+                if *self.layers[Layer::FRONT].get_tile(x + desc.dimensions.unwrap().0, y)
+                    == Tile::EMPTY
+                {
                     x += 1;
                     break;
                 }
 
-                // All is good, generate multi tile
-                self.generate_multi_tile(tile, x, y + 1);
-                x += desc.dimensions.unwrap().0;
+                // Check that there is a solid floor beneath the decor
+                let mut okay = true;
+                for w in 1..desc.dimensions.unwrap().0 {
+                    if *self.layers[Layer::FRONT].get_tile(x + w, y) == Tile::EMPTY {
+                        okay = false;
+                    }
+                }
+
+                if !okay {
+                    x += 1;
+                    break;
+                }
+
+                // Attempt to generate a multi tile
+                if let Some(_) = self.generate_multi_tile(tile, x, y + 1) {
+                    x += desc.dimensions.unwrap().0;
+                } else {
+                    x += 1;
+                }
+
                 break;
             }
         }
@@ -308,37 +343,64 @@ impl Terrain {
         }
     }
 
-    fn generate_tree(&mut self, x: u32, y: u32) {
-        // Generate randomly sized trunks
+    fn generate_tree(&mut self, x: u32, y: u32) -> Option<()> {
+        // Select a random trunk size
         let trunk_height = self
             .rng
             .gen_range(self.settings.trees.trunk_height_range.clone());
+
+        // Generate foliage first, this has to go through multi tile checks
+        let foliage = TileDescriptor::from_id(TileId::Tree(Tree::Foliage));
+
+        self.generate_multi_tile(
+            foliage.id,
+            x - foliage.dimensions.unwrap().0 / 2,
+            y + trunk_height,
+        )?;
+
+        println!("Generating trunk");
 
         for h in 0..trunk_height {
             let variant = self
                 .rng
                 .gen_range(0..self.settings.trees.trunk_variants - 1);
+
             *self.layers[Layer::MIDDLE].get_tile_mut(x, y + h) =
                 Tile::new(TileId::Tree(Tree::Wood), Some((variant, 0)));
         }
 
-        // Generate foliage
-        let foliage = TileDescriptor::from_id(TileId::Tree(Tree::Foliage));
-        self.generate_multi_tile(foliage.id, x - foliage.dimensions.unwrap().0 / 2, y + trunk_height)
+        Some(())
     }
 
-    fn generate_multi_tile(&mut self, id: TileId, x: u32, y: u32) {
+    // Returns None if generation was obsructed
+    fn generate_multi_tile(&mut self, id: TileId, x: u32, y: u32) -> Option<()> {
         let desc = TileDescriptor::from_id(id);
+
+        // Unwrap the size. This should panic as a non-multi tile should be caught by devs
         let size = desc
             .dimensions
             .unwrap_or_else(|| panic!("Tile {:?} is not a multi tile", id));
 
-        for x1 in 0..size.0 {
-            for y1 in 0..size.1 {
-                *self.layers[Layer::MIDDLE].get_tile_mut(x + x1, y + y1) =
-                    Tile::new(id, Some((x1, size.1 - y1 - 1)))
+        // Check for obstructions
+        for w in 0..size.0 {
+            for h in 0..size.1 {
+                if *self.layers[Layer::FRONT].get_tile(x + w, y + h) != Tile::EMPTY
+                    || *self.layers[Layer::MIDDLE].get_tile(x + w, y + h) != Tile::EMPTY
+                {
+                    return None;
+                }
             }
         }
+
+        // All good, generate
+        for w in 0..size.0 {
+            for h in 0..size.1 {
+                *self.layers[Layer::MIDDLE].get_tile_mut(x + w, y + h) =
+                    Tile::new(id, Some((w, size.1 - h - 1)));
+            }
+        }
+
+        Some(())
     }
 
     // Smooth out randomly generated noise by making each tile more similar to it's neighbour
