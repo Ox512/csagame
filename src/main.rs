@@ -1,4 +1,5 @@
 #![feature(let_chains)]
+#![feature(variant_count)]
 
 pub mod camera;
 pub mod surrounds;
@@ -10,6 +11,11 @@ use bevy_ecs_tilemap::TilemapPlugin;
 
 use camera::*;
 use terrain::bevy_connect::setup_world;
+
+// Values that will later be changed during world creation
+pub const CHUNK_COUNT: u32 = 20;
+pub const WORLD_SIZE: (u32, u32) = (128 * CHUNK_COUNT, 128);
+pub const WORLD_SEED: &str = "7";
 
 fn main() {
     let _app = App::new()
@@ -28,18 +34,4 @@ fn main() {
         //.add_startup_system(setup)
         .add_system(camera::move_camera)
         .run();
-}
-
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
-    // Entity
-    let entity_sprite = asset_server.load("Entity.png");
-    commands.spawn_bundle(SpriteBundle {
-        texture: entity_sprite,
-        transform: Transform {
-            translation: Vec3::default(),
-            rotation: Quat::default(),
-            scale: Vec3::new(2.0, 2.0, 1.0),
-        },
-        ..Default::default()
-    });
 }

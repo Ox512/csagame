@@ -1,4 +1,5 @@
 use std::ops::Index;
+use std::ops::IndexMut;
 
 use crate::surrounds::*;
 use crate::tile::*;
@@ -9,10 +10,6 @@ pub struct Layer {
 
     pub width: u32,
     pub height: u32,
-
-    // Iterator control values
-    x: u32,
-    y: u32,
 }
 
 impl Layer {
@@ -37,17 +34,29 @@ impl Layer {
             tiles,
             width,
             height,
-            x: 0,
-            y: 0,
         }
     }
 
-    pub fn get_tile(&self, x: u32, y: u32) -> &Tile {
-        &self.tiles[x as usize][y as usize]
-    }
+    // Runs a function on all tiles within a radius
+    // Note: This doesn't do accurate radius checking, just a square
+    pub fn modify_in_radius<F: FnMut(&mut Tile, f32)>(
+        &mut self,
+        pos: (u32, u32),
+        radius: u32,
+        mut func: F,
+    ) {
+        for w in (pos.0 as isize - radius as isize)..(pos.0 as isize + radius as isize) {
+            for h in (pos.1 as isize - radius as isize)..(pos.1 as isize + radius as isize) {
+                if let Some(tile) = self.get_tile_mut_checked(w, h) {
+                    // Pass the distance to func
+                    let dist = ((pos.0 as f32 - w as f32).powf(2.0)
+                        + (pos.1 as f32 - h as f32).powf(2.0))
+                    .sqrt();
 
-    pub fn get_tile_mut(&mut self, x: u32, y: u32) -> &mut Tile {
-        &mut self.tiles[x as usize][y as usize]
+                    func(tile, dist)
+                }
+            }
+        }
     }
 
     // The following two functions take an isize instead of a u32, this is
@@ -55,7 +64,7 @@ impl Layer {
     // check for negatives and return None. isize is used as it can fit
     // the whole range of u32
 
-    pub fn get_tile_checked(&self, x: isize, y: isize) -> Option<&Tile> {
+    fn get_tile_checked(&self, x: isize, y: isize) -> Option<&Tile> {
         if x >= 0 && x < self.width as isize && y >= 0 && y < self.height as isize {
             Some(&self.tiles[x as usize][y as usize])
         } else {
@@ -63,7 +72,7 @@ impl Layer {
         }
     }
 
-    pub fn get_tile_mut_checked(&mut self, x: isize, y: isize) -> Option<&mut Tile> {
+    fn get_tile_mut_checked(&mut self, x: isize, y: isize) -> Option<&mut Tile> {
         if x >= 0 && x < self.width as isize && y >= 0 && y < self.height as isize {
             Some(&mut self.tiles[x as usize][y as usize])
         } else {
@@ -115,5 +124,19 @@ impl Layer {
         }
 
         surrounds
+    }
+}
+
+impl Index<(u32, u32)> for Layer {
+    type Output = Tile;
+
+    fn index(&self, index: (u32, u32)) -> &Self::Output {
+        return &self.tiles[index.0 as usize][index.1 as usize];
+    }
+}
+
+impl IndexMut<(u32, u32)> for Layer {
+    fn index_mut(&mut self, index: (u32, u32)) -> &mut Self::Output {
+        return &mut self.tiles[index.0 as usize][index.1 as usize];
     }
 }

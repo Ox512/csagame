@@ -11,6 +11,7 @@ pub enum TileId {
     Null, // Should never be present in a functioning world
     Empty,
     Ground(Ground),
+    Ore(Ore),
     Background(Background),
     SurfaceDecor(SurfaceDecor),
     Tree(Tree),
@@ -21,6 +22,12 @@ pub enum Ground {
     Grass,
     Dirt,
     Stone,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, FromPrimitive)]
+pub enum Ore {
+    Iron,
+    Gold,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -82,14 +89,23 @@ impl Tile {
     }
 }
 
-// Contains a description of every tile
+// Describes ore-specific properties
+#[derive(Copy, Clone)]
+pub struct OreDescriptor {
+    pub max_height: f32,
+    pub radius: u32,
+}
 
+// Contains a description of every tile
 pub struct TileDescriptor {
     pub id: TileId,
     pub tileset_position: u32,
 
     // Used for structures that take up more than one tile
     pub dimensions: Option<(u32, u32)>,
+
+    // Describes ore related properties
+    pub ore: Option<OreDescriptor>,
 
     // Basic stats
     pub hardness: f32,
@@ -108,84 +124,117 @@ impl TileDescriptor {
     }
 
     // Array of all tiles in the game, this will be replaced with a file
-    const DESCRIPTORS: [Self; 13] = [
+    const DESCRIPTORS: [Self; 15] = [
         Self {
             id: TileId::Null,
             tileset_position: TILESET_SIZE.0 * TILESET_SIZE.1 - 1,
             dimensions: None,
             hardness: INFINITY,
+            ore: None,
         },
         Self {
             id: TileId::Empty,
             tileset_position: TILESET_SIZE.0 * TILESET_SIZE.1 - 2,
             dimensions: None,
             hardness: 0.0,
+            ore: None,
         },
         Self {
             id: TileId::Ground(Ground::Grass),
             tileset_position: 3 * TILESET_SIZE.0,
             dimensions: None,
             hardness: 1.0,
+            ore: None,
         },
         Self {
             id: TileId::Ground(Ground::Dirt),
             tileset_position: 0,
             dimensions: None,
             hardness: 1.0,
+            ore: None,
         },
         Self {
             id: TileId::Ground(Ground::Stone),
             tileset_position: 6 * TILESET_SIZE.0,
             dimensions: None,
             hardness: 1.0,
+            ore: None,
+        },
+        Self {
+            id: TileId::Ore(Ore::Iron),
+            tileset_position: 9 * TILESET_SIZE.0,
+            dimensions: None,
+            hardness: 1.0,
+            ore: Some(OreDescriptor {
+                max_height: 1.0,
+                radius: 4,
+            }),
+        },
+        Self {
+            id: TileId::Ore(Ore::Gold),
+            tileset_position: 12 * TILESET_SIZE.0,
+            dimensions: None,
+            hardness: 1.0,
+            ore: Some(OreDescriptor {
+                max_height: 0.50,
+                radius: 3,
+            }),
         },
         Self {
             id: TileId::Background(Background::Dirt),
             tileset_position: 0,
             dimensions: None,
             hardness: 1.0,
+            ore: None,
         },
         Self {
             id: TileId::Background(Background::Stone),
             tileset_position: 3 * TILESET_SIZE.0,
             dimensions: None,
             hardness: 1.0,
+            ore: None,
         },
         Self {
             id: TileId::SurfaceDecor(SurfaceDecor::GrassSmall),
             tileset_position: 1 * TILESET_SIZE.0,
             dimensions: None,
             hardness: 1.0,
+            ore: None,
         },
         Self {
             id: TileId::SurfaceDecor(SurfaceDecor::GrassMedium),
             tileset_position: 1,
             dimensions: Some((1, 2)),
             hardness: 1.0,
+            ore: None,
         },
         Self {
             id: TileId::SurfaceDecor(SurfaceDecor::Rock),
             tileset_position: 3 * TILESET_SIZE.0,
             dimensions: None,
             hardness: 1.0,
+            ore: None,
         },
         Self {
             id: TileId::SurfaceDecor(SurfaceDecor::RockPile),
             tileset_position: 3 * TILESET_SIZE.0 + 1,
             dimensions: Some((2, 1)),
             hardness: 1.0,
+            ore: None,
         },
         Self {
             id: TileId::Tree(Tree::Wood),
             tileset_position: 17,
             dimensions: None,
             hardness: 1.0,
+            ore: None,
         },
         Self {
             id: TileId::Tree(Tree::Foliage),
             tileset_position: 1 * TILESET_SIZE.0 + 17,
             dimensions: Some((5, 6)),
             hardness: 1.0,
+            ore: None,
         },
     ];
 }

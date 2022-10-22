@@ -6,10 +6,19 @@ pub struct GenerationSettings {
     pub caves: CaveSettings,
     pub decor: DecorSettings,
     pub trees: TreeSettings,
+
     pub dirt_height: f32,
+
+    // Affects the change between stone and dirt
     pub stone_blur: u32,
     pub stone_jitter: u32,
+
     pub background_offset: u32,
+
+    pub ore_height: f32,
+
+    // Lower = more frequent ore spawn rates
+    pub ore_rate: u32,
 }
 
 impl GenerationSettings {
@@ -27,24 +36,26 @@ impl GenerationSettings {
             solid_density: 0.1,
             smooth_iters: 4,
             convert_min: 4,
-            falloff: 2.3,
+            falloff: 2.0,
         },
 
         decor: DecorSettings {
             surface: 0..4,
-            surface_rate: 0.125,
+            surface_rate: 0.4,
         },
 
         trees: TreeSettings {
             trunk_height_range: 3..5,
             trunk_variants: 5,
-            spawn_rate: 0.125,
+            spawn_rate: 0.4,
         },
 
         dirt_height: 0.60,
         stone_blur: 18,
-        stone_jitter: 3,
-        background_offset: 4,
+        stone_jitter: 6,
+        background_offset: 2,
+        ore_height: 0.575,
+        ore_rate: 3,
     };
 }
 

@@ -62,7 +62,7 @@ impl Terrain {
                     .insert_bundle(TileBundle {
                         position: pos,
                         tilemap_id: TilemapId(tm_entity),
-                        texture: TileTexture(self.layers[layer].get_tile(x, y).get_texture_index()),
+                        texture: TileTexture(self.layers[layer][(x, y)].get_texture_index()),
                         ..Default::default()
                     })
                     .id();
@@ -94,8 +94,8 @@ pub fn setup_world(mut commands: Commands, asset_server: Res<AssetServer>) {
     let mut terrain = Terrain::new(
         None,
         GenerationSettings::FOREST,
-        DEFAULT_SIZE.0,
-        DEFAULT_SIZE.1,
+        WORLD_SIZE.0,
+        WORLD_SIZE.1,
     );
 
     terrain.generate();
