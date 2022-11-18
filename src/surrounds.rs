@@ -12,8 +12,8 @@ bitflags! {
         const TL = 0b00000001; // Top left
         const TM = 0b00000010; // Top middle
         const TR = 0b00000100; // Top right
-        const ML = 0b00001_000; // Decor left
-        const MR = 0b00010_000; // Decor right
+        const ML = 0b00001_000; // Middle left
+        const MR = 0b00010_000; // Middle right
         const BL = 0b00100_000; // Bottom left
         const BM = 0b01_000_000; // Bottom middle
         const BR = 0b10_000_000; // Bottom right
@@ -132,7 +132,7 @@ const TEXT_OFFSETS: [(u32, u32); 256] = [
     (10, 1),
     (20, 0),
     (20, 0),
-    (10, 1),
+    (9, 1),
     (11, 0),
     (4, 0),
     (4, 0),
@@ -255,7 +255,7 @@ const TEXT_OFFSETS: [(u32, u32); 256] = [
     (0, 1),
     (0, 1),
     (18, 0),
-    (17, 0),
+    (18, 0),
     (9, 0),
     (12, 0),
     (18, 0),

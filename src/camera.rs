@@ -1,12 +1,13 @@
 use bevy::prelude::*;
 
-// Module containing all controls related to moving the camera
-
 pub const CAMERA_MOVE_SPEED: f32 = 250.0; // Distance per second
+
+#[derive(Resource)]
+pub struct CursorPos(pub Vec2);
 
 // Contructs the camera
 pub fn setup_camera(mut commands: Commands) {
-    commands.spawn_bundle(Camera2dBundle {
+    commands.spawn(Camera2dBundle {
         transform: Transform::default().with_scale(Vec3::new(0.5, 0.5, 1.0)),
         ..Default::default()
     });
@@ -41,5 +42,26 @@ pub fn move_camera(
 
     if dir != Vec3::ZERO {
         transform.translation += dir.normalize() * speed;
+    }
+}
+
+pub fn update_cursor_pos(
+    windows: Res<Windows>,
+    cam_query: Query<(&Transform, &Camera)>,
+    mut cursor_events: EventReader<CursorMoved>,
+    mut cursor_pos: ResMut<CursorPos>,
+) {
+    let window = windows.primary();
+    let (transform, cam) = cam_query.single();
+
+    // Cursor pos is only calculated if cursor is inside game window
+    if let Some(screen_pos) = window.cursor_position() {
+        let window_size = Vec2::new(window.width(), window.height());
+
+        // Convert to ndc co-ords [-1..1] then to world co-ords
+        let ndc = (screen_pos / window_size) * 2.0 - Vec2::ONE;
+        let ndc_to_word = transform.compute_matrix() * cam.projection_matrix().inverse();
+
+        *cursor_pos = CursorPos(ndc_to_word.project_point3(ndc.extend(0.0)).truncate());
     }
 }

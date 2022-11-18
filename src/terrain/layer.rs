@@ -64,7 +64,7 @@ impl Layer {
     // check for negatives and return None. isize is used as it can fit
     // the whole range of u32
 
-    fn get_tile_checked(&self, x: isize, y: isize) -> Option<&Tile> {
+    pub fn get_tile_checked(&self, x: isize, y: isize) -> Option<&Tile> {
         if x >= 0 && x < self.width as isize && y >= 0 && y < self.height as isize {
             Some(&self.tiles[x as usize][y as usize])
         } else {
@@ -72,7 +72,7 @@ impl Layer {
         }
     }
 
-    fn get_tile_mut_checked(&mut self, x: isize, y: isize) -> Option<&mut Tile> {
+    pub fn get_tile_mut_checked(&mut self, x: isize, y: isize) -> Option<&mut Tile> {
         if x >= 0 && x < self.width as isize && y >= 0 && y < self.height as isize {
             Some(&mut self.tiles[x as usize][y as usize])
         } else {

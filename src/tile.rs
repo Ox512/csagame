@@ -4,7 +4,6 @@ use num_derive::FromPrimitive;
 
 pub const TILESET_SIZE: (u32, u32) = (22, 16);
 
-// #[Component]
 // Attached to every tile, used for identification
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TileId {

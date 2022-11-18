@@ -12,10 +12,11 @@ use crate::terrain::settings::*;
 use crate::tile::*;
 use crate::*;
 
+#[derive(Resource)]
 pub struct Terrain {
-    width: u32,
-    height: u32,
-    seed: String,
+    pub width: u32,
+    pub height: u32,
+    pub seed: String,
 
     // Noise and Rn generators
     rng: SipRng,
@@ -26,7 +27,7 @@ pub struct Terrain {
     settings: GenerationSettings,
 
     // TileData arrays for each layer
-    layers: [Layer; 3],
+    pub layers: [Layer; 3],
 }
 
 impl Terrain {
@@ -100,7 +101,8 @@ impl Terrain {
         for x in 0..self.width {
             // Generate hills and mountains w/ fbm
             let max_height = (self.surface_fbm.get([
-                (self.settings.surface.scale * x as f32 / self.width as f32 * CHUNK_COUNT as f32) as f64,
+                (self.settings.surface.scale * x as f32 / self.width as f32 * CHUNK_COUNT as f32)
+                    as f64,
                 0.0,
             ]) as f32
                 * self.settings.surface.amplitude
