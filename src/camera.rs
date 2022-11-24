@@ -48,7 +48,6 @@ pub fn move_camera(
 pub fn update_cursor_pos(
     windows: Res<Windows>,
     cam_query: Query<(&Transform, &Camera)>,
-    mut cursor_events: EventReader<CursorMoved>,
     mut cursor_pos: ResMut<CursorPos>,
 ) {
     let window = windows.primary();

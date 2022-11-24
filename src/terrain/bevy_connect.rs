@@ -57,6 +57,13 @@ impl Terrain {
         // Entity corresponding to the whole tilemap
         let tm_entity = commands.spawn_empty().id();
 
+        let mut tm_transform = get_tilemap_center_transform(
+            &tm_size,
+            &GRID_SIZE,
+            &TilemapType::Square,
+            -1.0 - (layer as usize as f32),
+        );
+
         // Place tiles
         for x in 0..tm_size.x {
             for y in 0..tm_size.y {
@@ -77,20 +84,18 @@ impl Terrain {
                         ),
                         ..Default::default()
                     })
+                    .insert(TransformBundle::from(Transform::from_xyz(
+                        x as f32 * 8.0 + tm_transform.translation.x,
+                        y as f32 * 8.0 + tm_transform.translation.y,
+                        0.0,
+                    )))
                     .id();
 
                 storage.set(&pos, entity);
             }
         }
 
-        let mut transform = get_tilemap_center_transform(
-            &tm_size,
-            &GRID_SIZE,
-            &TilemapType::Square,
-            -1.0 - (layer as usize as f32),
-        );
-
-        transform.translation.y += offset;
+        tm_transform.translation.y += offset;
 
         // Add the tilemap to bevy
         commands
@@ -100,11 +105,95 @@ impl Terrain {
                 grid_size: GRID_SIZE,
                 size: tm_size,
                 texture: TilemapTexture::Single(atlas.texture),
-                transform,
+                transform: tm_transform,
                 storage,
                 ..Default::default()
             })
             .insert(TilemapLayer(layer));
+    }
+
+    // Update the textures of tiles surround a tile
+    // Used when adding or removing tiles
+    pub fn update_surrounds(
+        &mut self,
+        commands: &mut Commands,
+        storage: &mut TileStorage,
+        pos: TilePos,
+        layer: usize,
+    ) {
+        for x in (pos.x as isize - 1)..=(pos.x as isize + 1) {
+            for y in (pos.y as isize - 1)..=(pos.y as isize + 1) {
+                // This has to be done out of the if-let - E0502
+                let new_offset = self.layers[layer]
+                    .get_surrounds(x as u32, y as u32)
+                    .get_texture_offset();
+
+                if let Some(tile) = self.layers[layer].get_tile_mut_checked(x, y) {
+                    if let Some(entity) = storage.get(&TilePos::new(x as u32, y as u32)) {
+                        tile.texture_offset = Some(new_offset);
+                        commands
+                            .entity(entity)
+                            .insert(TileTextureIndex(tile.get_texture_index()));
+                    }
+                }
+            }
+        }
+    }
+
+    // Insert a tile into the tilemap
+    pub fn insert_tile(
+        &mut self,
+        commands: &mut Commands,
+        tm_storage: &mut TileStorage,
+        tm_transform: &Transform,
+        tm_entity: Entity,
+        layer: usize,
+        pos: TilePos,
+        tile: Tile,
+    ) {
+        let entity = commands
+            .spawn_empty()
+            .insert(TileBundle {
+                position: pos,
+                tilemap_id: TilemapId(tm_entity),
+                texture_index: TileTextureIndex(tile.get_texture_index()),
+                ..Default::default()
+            })
+            .insert(TransformBundle::from(Transform::from_xyz(
+                pos.x as f32 * 8.0 + tm_transform.translation.x,
+                pos.y as f32 * 8.0 + tm_transform.translation.y,
+                0.0,
+            )))
+            .id();
+
+        tm_storage.set(&pos, entity);
+
+        self.layers[layer][(pos.x, pos.y)] = tile;
+        self.update_surrounds(commands, tm_storage, pos, layer);
+    }
+
+    pub fn remove_tile(
+        &mut self,
+        commands: &mut Commands,
+        tm_storage: &mut TileStorage,
+        layer: usize,
+        pos: TilePos,
+    ) -> Option<()> {
+        // Remove the tile's entity
+        let entity = tm_storage.get(&pos)?;
+
+        tm_storage.remove(&pos);
+        commands.entity(entity).despawn_recursive();
+        self.layers[layer][(pos.x, pos.y)] = Tile::EMPTY;
+
+        // Update surrounding tiles - only on fore and background
+        if layer == Layer::MIDDLE {
+            return Some(())
+        }
+
+        self.update_surrounds(commands, tm_storage, pos, layer);
+
+        Some(())
     }
 }
 
