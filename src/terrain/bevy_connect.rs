@@ -4,10 +4,10 @@
 use bevy::prelude::*;
 use bevy_ecs_tilemap::prelude::*;
 
-use crate::terrain::layer::*;
 use crate::terrain::settings::*;
 use crate::terrain::*;
 use crate::tile::TILESET_SIZE;
+use crate::*;
 
 const TILE_SIZE: TilemapTileSize = TilemapTileSize { x: 8.0, y: 8.0 };
 const GRID_SIZE: TilemapGridSize = TilemapGridSize { x: 8.0, y: 8.0 };
@@ -25,9 +25,9 @@ impl Terrain {
         // Create atlas out of desired tileset
         let atlas = {
             let handle;
-            if layer == Layer::FRONT {
+            if layer == FRONT {
                 handle = asset_server.load("Tiles.png");
-            } else if layer == Layer::MIDDLE {
+            } else if layer == MIDDLE {
                 handle = asset_server.load("MiddlegroundTiles.png");
             } else {
                 handle = asset_server.load("BackgroundTiles.png");
@@ -45,7 +45,7 @@ impl Terrain {
 
         // Tiles in the MIDDLE layer are shifted down by
         // 2 pixels so that they connect nicely to FRONT tiles
-        let offset = if layer == Layer::MIDDLE { -3.0 } else { 0.0 };
+        let offset = if layer == MIDDLE { -3.0 } else { 0.0 };
 
         let tm_size = TilemapSize {
             x: self.width,
@@ -124,11 +124,11 @@ impl Terrain {
         for x in (pos.x as isize - 1)..=(pos.x as isize + 1) {
             for y in (pos.y as isize - 1)..=(pos.y as isize + 1) {
                 // This has to be done out of the if-let - E0502
-                let new_offset = self.layers[layer]
-                    .get_surrounds(x as u32, y as u32)
+                let new_offset = self
+                    .get_surrounds(layer, x as u32, y as u32)
                     .get_texture_offset();
 
-                if let Some(tile) = self.layers[layer].get_tile_mut_checked(x, y) {
+                if let Some(tile) = self.layers[layer].get_mut(x, y) {
                     if let Some(entity) = storage.get(&TilePos::new(x as u32, y as u32)) {
                         tile.texture_offset = Some(new_offset);
                         commands
@@ -170,6 +170,31 @@ impl Terrain {
 
         self.layers[layer][(pos.x, pos.y)] = tile;
         self.update_surrounds(commands, tm_storage, pos, layer);
+
+        // Update Pathfinding nodes
+
+        // Check if this is now a valid walking tile
+        let tiles_above = [
+            self.layers[FRONT].get(pos.x as isize, pos.x as isize + 1),
+            self.layers[FRONT].get(pos.x as isize, pos.x as isize + 2),
+            self.layers[FRONT].get(pos.x as isize, pos.x as isize + 3),
+        ];
+
+        if (tiles_above[0].is_none() || tiles_above[0] == Some(&Tile::EMPTY))
+            && (tiles_above[1].is_none() || tiles_above[1] == Some(&Tile::EMPTY))
+            && (tiles_above[2].is_none() || tiles_above[2] == Some(&Tile::EMPTY))
+        {
+            self.nodes[(pos.x, pos.y)] = node::PathTile::Walkable;
+        }
+
+        // Check that this added tile hasn't obstructed any other nodes
+        if let Some(node) = self.nodes.get_mut(pos.x as isize, pos.y as isize - 1) {
+            *node = node::PathTile::NonWalkable;
+        }
+
+        if let Some(node) = self.nodes.get_mut(pos.x as isize, pos.y as isize - 2) {
+            *node = node::PathTile::NonWalkable;
+        }
     }
 
     pub fn remove_tile(
@@ -187,11 +212,42 @@ impl Terrain {
         self.layers[layer][(pos.x, pos.y)] = Tile::EMPTY;
 
         // Update surrounding tiles - only on fore and background
-        if layer == Layer::MIDDLE {
-            return Some(())
+        if layer == MIDDLE {
+            return Some(());
         }
 
         self.update_surrounds(commands, tm_storage, pos, layer);
+
+        // Update Pathfinding nodes
+
+        // This node could now belong to the air-space of three
+        // other nodes
+        let ground_tiles = [
+            self.layers[FRONT].get(pos.x as isize, pos.y as isize - 1),
+            self.layers[FRONT].get(pos.x as isize, pos.y as isize - 2),
+            self.layers[FRONT].get(pos.x as isize, pos.y as isize - 3),
+        ];
+
+        for i in 0..ground_tiles.len() {
+            // Check for a valid floor tile
+            if let Some(tile) = ground_tiles[i] && *tile != Tile::EMPTY {
+                // Now check the 3 air tiles above it
+                let y = (pos.y - 1 - i as u32) as isize;
+
+                let tiles_above = [
+                    self.layers[FRONT].get(pos.x as isize, y + 1),
+                    self.layers[FRONT].get(pos.x as isize, y as isize + 2),
+                    self.layers[FRONT].get(pos.x as isize, y as isize + 3),
+                ];
+
+                if (tiles_above[0].is_none() || tiles_above[0] == Some(&Tile::EMPTY))
+                    && (tiles_above[1].is_none() || tiles_above[1] == Some(&Tile::EMPTY))
+                    && (tiles_above[2].is_none() || tiles_above[2] == Some(&Tile::EMPTY))
+                {
+                    self.nodes[(pos.x, y as u32)] = PathTile::Walkable;
+                }
+            }
+        }
 
         Some(())
     }
@@ -204,7 +260,7 @@ pub fn setup_world(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     terrain.generate();
 
-    for i in 0..Layer::TOTAL_LAYERS {
+    for i in 0..TOTAL_LAYERS {
         terrain.spawn_layer_tilemap(&mut commands, &asset_server, i)
     }
 

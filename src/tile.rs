@@ -5,9 +5,11 @@ use num_derive::FromPrimitive;
 pub const TILESET_SIZE: (u32, u32) = (22, 16);
 
 // Attached to every tile, used for identification
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TileId {
+    #[default]
     Null, // Should never be present in a functioning world
+
     Empty,
     Ground(Ground),
     Ore(Ore),
@@ -50,7 +52,7 @@ pub enum Tree {
 }
 
 // Used during world creation and in save files
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Tile {
     pub id: TileId,
 

@@ -34,6 +34,7 @@ pub fn update_colliders(
         &Transform,
     )>,
     tile_query: Query<&Transform, With<TilePos>>,
+    col_tile_query: Query<&Collider, With<TilePos>>,
 ) {
     // We only work with the Foreground layer
     let (tm_size, tm_grid_size, tm_storage, tm_layer, tm_transform) =
@@ -77,17 +78,20 @@ pub fn update_colliders(
                     pos
                 };
 
-                if let Some(tile_entity) = tm_storage.get(&pos) {
+                if let Some(tile_entity) = tm_storage.checked_get(&pos) {
                     // Add a collider if there isn't already one
-                    if tile_query.get_component::<Collider>(tile_entity).is_err() {
+                    if col_tile_query.get_component::<Collider>(tile_entity).is_err() {
                         let tile_transform = tile_query
                             .get_component::<Transform>(tile_entity)
                             .expect("Tile without transform!");
 
-                        commands
-                            .entity(tile_entity)
-                            .insert(Collider::cuboid(4.0, 4.0))
-                            .insert(TransformBundle::from(tile_transform.clone()));
+                        let tile = commands.get_entity(tile_entity);
+
+                        if let Some(mut tile) = tile {
+                            tile
+                                .insert(Collider::cuboid(4.0, 4.0))
+                                .insert(TransformBundle::from(*tile_transform));
+                        }
                     }
 
                     // Entity now either has or already had a collider
@@ -100,8 +104,12 @@ pub fn update_colliders(
         // Remove all the colliders that are
         // no longer in range of this Character
         for c in &col.enabled_colliders {
-            if !colliders.contains(&c) {
-                commands.entity(c.clone()).remove::<Collider>();
+            if !colliders.contains(c) {
+                let tile = commands.get_entity(*c);
+
+                if let Some(mut tile) = tile {
+                    tile.remove::<Collider>();
+                }
             }
         }
 

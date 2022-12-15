@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 pub const CAMERA_MOVE_SPEED: f32 = 250.0; // Distance per second
 
-#[derive(Resource)]
+#[derive(Resource, Deref, DerefMut)]
 pub struct CursorPos(pub Vec2);
 
 // Contructs the camera
@@ -53,7 +53,7 @@ pub fn update_cursor_pos(
     let window = windows.primary();
     let (transform, cam) = cam_query.single();
 
-    // Cursor pos is only calculated if cursor is inside game window
+    // Cursor pos is only calculated if cursor.0 is inside game window
     if let Some(screen_pos) = window.cursor_position() {
         let window_size = Vec2::new(window.width(), window.height());
 

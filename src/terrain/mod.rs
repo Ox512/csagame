@@ -1,16 +1,28 @@
 pub mod bevy_connect;
-pub mod layer;
+//pub mod layer;
+pub mod node;
 pub mod settings;
 
+use bevy::prelude::Resource;
 use noise::{Fbm, MultiFractal, NoiseFn, Seedable, Value};
 use num_traits::FromPrimitive;
 use rand::Rng;
 use rand_seeder::{rand_core::RngCore, Seeder, SipRng};
 
-use crate::terrain::layer::*;
-use crate::terrain::settings::*;
+use self::node::*;
+use self::settings::*;
+
+use crate::layer::*;
+use crate::surrounds::Surrounds;
 use crate::tile::*;
-use crate::*;
+use crate::CHUNK_COUNT;
+use crate::WORLD_SEED;
+
+// Layer index constants
+pub const FRONT: usize = 0;
+pub const MIDDLE: usize = 1;
+pub const BACK: usize = 2;
+pub const TOTAL_LAYERS: usize = 3;
 
 #[derive(Resource)]
 pub struct Terrain {
@@ -27,7 +39,10 @@ pub struct Terrain {
     settings: GenerationSettings,
 
     // TileData arrays for each layer
-    pub layers: [Layer; 3],
+    pub layers: [Layer<Tile>; 3],
+
+    // All the floors in the game
+    pub nodes: Layer<PathTile>,
 }
 
 impl Terrain {
@@ -60,6 +75,8 @@ impl Terrain {
             .set_persistence(settings.surface.persistence as f64)
             .set_octaves(settings.surface.octaves);
 
+        let nodes = Layer::new(width, height);
+
         Terrain {
             width,
             height,
@@ -69,31 +86,8 @@ impl Terrain {
             surface_fbm,
             settings,
             layers,
+            nodes,
         }
-    }
-
-    // Displays the world in a text format
-    pub fn to_string(&self) -> String {
-        let mut out = String::new();
-
-        for y in (0..self.height).rev() {
-            for x in 0..self.width {
-                match self.layers[Layer::FRONT][(x, y)].id {
-                    TileId::Null => out.push('E'),
-
-                    TileId::Empty => out.push(' '),
-                    TileId::Ground(Ground::Grass) => out.push('w'),
-                    TileId::Ground(Ground::Dirt) => out.push('x'),
-                    TileId::Ground(Ground::Stone) => out.push('□'),
-
-                    // Only print Foreground tiles
-                    _ => (),
-                }
-            }
-            out.push('\n');
-        }
-
-        out
     }
 
     pub fn generate(&mut self) {
@@ -119,29 +113,25 @@ impl Terrain {
 
                 // All tiles above the max height should be empty
                 // It is also good to make all tiles at max_height solid
-                if y < max_height && self.value.get([x as f64, y as f64]) as f32 >= solid_density {
-                    self.layers[Layer::FRONT][(x, y)] =
-                        Tile::new(TileId::Ground(Ground::Stone), None);
-                } else if y == max_height {
-                    self.layers[Layer::FRONT][(x, y)] =
-                        Tile::new(TileId::Ground(Ground::Stone), None);
+                if y <= max_height && self.value.get([x as f64, y as f64]) as f32 >= solid_density {
+                    self.layers[FRONT][(x, y)] = Tile::new(TileId::Ground(Ground::Stone), None);
                 } else {
-                    self.layers[Layer::FRONT][(x, y)] = Tile::EMPTY;
+                    self.layers[FRONT][(x, y)] = Tile::EMPTY;
                 }
 
                 // Generate background slightly below terrain
                 if y <= max_height - self.settings.background_offset {
-                    self.layers[Layer::BACK][(x, y)] =
+                    self.layers[BACK][(x, y)] =
                         Tile::new(TileId::Background(Background::Stone), None);
                 } else {
-                    self.layers[Layer::BACK][(x, y)] = Tile::EMPTY;
+                    self.layers[BACK][(x, y)] = Tile::EMPTY;
                 }
             }
         }
 
         // Cellular automata smoothening
         for _ in 0..self.settings.caves.smooth_iters {
-            self.layers[Layer::FRONT] = self.smooth();
+            self.layers[FRONT] = self.smooth();
         }
 
         // Dirt
@@ -157,13 +147,12 @@ impl Terrain {
                 as u32;
 
             for y in dirt_height..self.height {
-                if self.layers[Layer::FRONT][(x, y)] != Tile::EMPTY {
-                    self.layers[Layer::FRONT][(x, y)] =
-                        Tile::new(TileId::Ground(Ground::Dirt), None);
+                if self.layers[FRONT][(x, y)] != Tile::EMPTY {
+                    self.layers[FRONT][(x, y)] = Tile::new(TileId::Ground(Ground::Dirt), None);
                 }
 
-                if self.layers[Layer::BACK][(x, y)] != Tile::EMPTY {
-                    self.layers[Layer::BACK][(x, y)] =
+                if self.layers[BACK][(x, y)] != Tile::EMPTY {
+                    self.layers[BACK][(x, y)] =
                         Tile::new(TileId::Background(Background::Dirt), None);
                 }
             }
@@ -172,14 +161,14 @@ impl Terrain {
         // Ores
         for _ in 0..self.width / self.settings.ore_rate {
             // Choose a random coordinate
-            let pos: (u32, u32) = (
+            let (x, y) = (
                 self.rng.gen_range(0..self.width - 1),
                 self.rng
                     .gen_range(0..((self.height as f32 * self.settings.ore_height) as u32)),
             );
 
             // Don't overwrite empty tiles
-            if self.layers[Layer::FRONT][pos] == Tile::EMPTY {
+            if self.layers[FRONT][(x, y)] == Tile::EMPTY {
                 continue;
             }
 
@@ -193,7 +182,7 @@ impl Terrain {
 
             while ((desc.ore.unwrap().max_height * self.settings.ore_height * self.height as f32)
                 as u32)
-                < pos.1
+                < y
             {
                 let selection = self.rng.gen_range(0..std::mem::variant_count::<Ore>());
                 desc = TileDescriptor::from_id(TileId::Ore(Ore::from_usize(selection).unwrap()));
@@ -201,26 +190,33 @@ impl Terrain {
 
             let ore = desc.ore.unwrap();
 
-            // Generate ore in a radius, with some randomness
-            let generate_ore = |tile: &mut Tile, dist: f32| {
-                let gen_chance = dist / ore.radius as f32;
+            // TODO: Ores might be broken - check
+            for w in (x as isize - ore.radius as isize)..(x as isize + ore.radius as isize) {
+                for h in (y as isize - ore.radius as isize)..(y as isize + ore.radius as isize) {
+                    if let Some(tile) = self.layers[FRONT].get_mut(w, h) {
+                        // Pass the distance to func
+                        let dist = ((y as f32 - w as f32).powf(2.0)
+                            + (y as f32 - h as f32).powf(2.0))
+                        .sqrt();
 
-                if self.rng.gen::<f32>() > gen_chance {
-                    *tile = Tile::new(desc.id, None);
+                        let gen_chance = dist / ore.radius as f32;
+
+                        if self.rng.gen::<f32>() > gen_chance {
+                            *tile = Tile::new(desc.id, None);
+                        }
+                    }
                 }
-            };
-
-            self.layers[Layer::FRONT].modify_in_radius(pos, ore.radius, generate_ore)
+            }
         }
 
         // Grass - go through each column and change the first solid tile to grass
         for x in 0..self.width {
             for y in (0..self.height).rev() {
-                if self.layers[Layer::FRONT][(x, y)] == Tile::EMPTY {
+                if self.layers[FRONT][(x, y)] == Tile::EMPTY {
                     continue;
                 }
 
-                self.layers[Layer::FRONT][(x, y)] = Tile::new(TileId::Ground(Ground::Grass), None);
+                self.layers[FRONT][(x, y)] = Tile::new(TileId::Ground(Ground::Grass), None);
 
                 break;
             }
@@ -229,7 +225,7 @@ impl Terrain {
         // 'Initialize' the Middleground layer with TileId::Empty
         for x in 0..self.width {
             for y in 0..self.height {
-                self.layers[Layer::MIDDLE][(x, y)] = Tile::EMPTY
+                self.layers[MIDDLE][(x, y)] = Tile::EMPTY
             }
         }
 
@@ -249,19 +245,19 @@ impl Terrain {
 
             for y in (0..self.height).rev() {
                 // Find a solid tile
-                if self.layers[Layer::FRONT][(x, y)] == Tile::EMPTY {
+                if self.layers[FRONT][(x, y)] == Tile::EMPTY {
                     continue;
                 }
 
                 // Check the left and right side of the tile for edges
-                if self.layers[Layer::FRONT][(x - 1, y)] == Tile::EMPTY
-                    || self.layers[Layer::FRONT][(x + 1, y)] == Tile::EMPTY
+                if self.layers[FRONT][(x - 1, y)] == Tile::EMPTY
+                    || self.layers[FRONT][(x + 1, y)] == Tile::EMPTY
                 {
                     x += 1;
                     break;
                 };
 
-                if let Some(_) = self.generate_tree(x, y + 1) {
+                if self.generate_tree(x, y + 1).is_some() {
                     x += 5;
                 } else {
                     x += 1;
@@ -284,7 +280,7 @@ impl Terrain {
 
             for y in (0..self.height).rev() {
                 // Find a solid tile
-                if self.layers[Layer::FRONT][(x, y)] == Tile::EMPTY {
+                if self.layers[FRONT][(x, y)] == Tile::EMPTY {
                     continue;
                 }
 
@@ -296,7 +292,7 @@ impl Terrain {
                 // x x x
 
                 // Check the left side of the tile for edges
-                if self.layers[Layer::FRONT][(x - 1, y)] == Tile::EMPTY {
+                if self.layers[FRONT][(x - 1, y)] == Tile::EMPTY {
                     x += 1;
                     break;
                 }
@@ -318,23 +314,23 @@ impl Terrain {
                 // Single width tiles can be directly placed
                 if desc.dimensions.is_none() {
                     // Check the right side of the tile for edges
-                    if self.layers[Layer::FRONT][(x + 1, y)] == Tile::EMPTY {
+                    if self.layers[FRONT][(x + 1, y)] == Tile::EMPTY {
                         x += 1;
                         break;
                     }
 
-                    if self.layers[Layer::MIDDLE][(x, y + 1)] != Tile::EMPTY {
+                    if self.layers[MIDDLE][(x, y + 1)] != Tile::EMPTY {
                         x += 1;
                         break;
                     }
 
-                    self.layers[Layer::MIDDLE][(x, y + 1)] = Tile::new(tile, None);
+                    self.layers[MIDDLE][(x, y + 1)] = Tile::new(tile, None);
                     x += 1;
                     break;
                 }
 
                 // Check the right side of the multi tile for edges
-                if self.layers[Layer::FRONT][(x + desc.dimensions.unwrap().0, y)] == Tile::EMPTY {
+                if self.layers[FRONT][(x + desc.dimensions.unwrap().0, y)] == Tile::EMPTY {
                     x += 1;
                     break;
                 }
@@ -342,7 +338,7 @@ impl Terrain {
                 // Check that there is a solid floor beneath the decor
                 let mut okay = true;
                 for w in 1..desc.dimensions.unwrap().0 {
-                    if self.layers[Layer::FRONT][(x + w, y)] == Tile::EMPTY {
+                    if self.layers[FRONT][(x + w, y)] == Tile::EMPTY {
                         okay = false;
                     }
                 }
@@ -367,24 +363,22 @@ impl Terrain {
         for x in 0..self.width {
             for y in 0..self.height {
                 // Foreground
-                if self.layers[Layer::FRONT][(x, y)].id != TileId::Empty {
-                    self.layers[Layer::FRONT][(x, y)].texture_offset = Some(
-                        self.layers[Layer::FRONT]
-                            .get_surrounds(x, y)
-                            .get_texture_offset(),
-                    );
+                if self.layers[FRONT][(x, y)].id != TileId::Empty {
+                    self.layers[FRONT][(x, y)].texture_offset =
+                        Some(self.get_surrounds(FRONT, x, y).get_texture_offset());
                 }
 
                 // Background
-                if self.layers[Layer::BACK][(x, y)].id != TileId::Empty {
-                    self.layers[Layer::BACK][(x, y)].texture_offset = Some(
-                        self.layers[Layer::BACK]
-                            .get_surrounds(x, y)
-                            .get_texture_offset(),
-                    );
+                if self.layers[BACK][(x, y)].id != TileId::Empty {
+                    self.layers[BACK][(x, y)].texture_offset =
+                        Some(self.get_surrounds(BACK, x, y).get_texture_offset());
                 }
             }
         }
+
+        // Finally
+        // Generate pathfinding tiles
+        self.generate_path_tiles();
     }
 
     fn generate_tree(&mut self, x: u32, y: u32) -> Option<()> {
@@ -407,7 +401,7 @@ impl Terrain {
                 .rng
                 .gen_range(0..self.settings.trees.trunk_variants - 1);
 
-            self.layers[Layer::MIDDLE][(x, y + h)] =
+            self.layers[MIDDLE][(x, y + h)] =
                 Tile::new(TileId::Tree(Tree::Wood), Some((variant, 0)));
         }
 
@@ -426,8 +420,8 @@ impl Terrain {
         // Check for obstructions
         for w in 0..size.0 {
             for h in 0..size.1 {
-                if self.layers[Layer::FRONT][(x + w, y + h)] != Tile::EMPTY
-                    || self.layers[Layer::MIDDLE][(x + w, y + h)] != Tile::EMPTY
+                if self.layers[FRONT][(x + w, y + h)] != Tile::EMPTY
+                    || self.layers[MIDDLE][(x + w, y + h)] != Tile::EMPTY
                 {
                     return None;
                 }
@@ -437,22 +431,67 @@ impl Terrain {
         // All good, generate
         for w in 0..size.0 {
             for h in 0..size.1 {
-                self.layers[Layer::MIDDLE][(x + w, y + h)] =
-                    Tile::new(id, Some((w, size.1 - h - 1)));
+                self.layers[MIDDLE][(x + w, y + h)] = Tile::new(id, Some((w, size.1 - h - 1)));
             }
         }
 
         Some(())
     }
 
+    pub fn get_surrounds(&self, layer: usize, x: u32, y: u32) -> Surrounds {
+        let mut surrounds = Surrounds::empty();
+
+        // TL
+        if let Some(t) = self.layers[layer].get(x as isize - 1, y as isize + 1) && t.id != TileId::Empty {
+                surrounds.toggle(Surrounds::TL)
+        }
+
+        // TM
+        if let Some(t) = self.layers[layer].get(x as isize, y as isize + 1) && t.id != TileId::Empty {
+            surrounds.toggle(Surrounds::TM)
+        }
+
+        // TR
+        if let Some(t) = self.layers[layer].get(x as isize + 1, y as isize + 1) && t.id != TileId::Empty {
+            surrounds.toggle(Surrounds::TR)
+        }
+
+        // ML
+        if let Some(t) = self.layers[layer].get(x as isize - 1, y as isize) && t.id != TileId::Empty {
+            surrounds.toggle(Surrounds::ML)
+        }
+
+        // MR
+        if let Some(t) = self.layers[layer].get(x as isize + 1, y as isize) && t.id != TileId::Empty {
+            surrounds.toggle(Surrounds::MR)
+        }
+
+        // BL
+        if let Some(t) = self.layers[layer].get(x as isize - 1, y as isize - 1) && t.id != TileId::Empty {
+            surrounds.toggle(Surrounds::BL)
+        }
+
+        // BM
+        if let Some(t) = self.layers[layer].get(x as isize, y as isize - 1) && t.id != TileId::Empty {
+            surrounds.toggle(Surrounds::BM)
+        }
+
+        // BR
+        if let Some(t) = self.layers[layer].get(x as isize + 1, y as isize - 1) && t.id != TileId::Empty {
+            surrounds.toggle(Surrounds::BR)
+        }
+
+        surrounds
+    }
+
     // Smooth out randomly generated noise by making each tile more similar to it's neighbour
     // Stores the result of the smooth in out to prevent tile_data from being corrupted in use
-    fn smooth(&self) -> Layer {
+    fn smooth(&self) -> Layer<Tile> {
         let mut output = Layer::new(self.width, self.height);
 
         for x in 0..self.width {
             for y in 0..self.height {
-                let w_count = self.layers[Layer::FRONT].get_surrounds(x, y).count();
+                let w_count = self.get_surrounds(FRONT, x, y).count();
 
                 if w_count >= self.settings.caves.convert_min {
                     output[(x, y)] = Tile::new(TileId::Ground(Ground::Stone), None)

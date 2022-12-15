@@ -9,14 +9,14 @@ use bitflags::bitflags;
 // BL BM BR
 bitflags! {
     pub struct Surrounds: u8 {
-        const TL = 0b00000001; // Top left
-        const TM = 0b00000010; // Top middle
-        const TR = 0b00000100; // Top right
-        const ML = 0b00001_000; // Middle left
-        const MR = 0b00010_000; // Middle right
-        const BL = 0b00100_000; // Bottom left
-        const BM = 0b01_000_000; // Bottom middle
-        const BR = 0b10_000_000; // Bottom right
+        const TL = 0b0000_0001; // Top left
+        const TM = 0b0000_0010; // Top middle
+        const TR = 0b0000_0100; // Top right
+        const ML = 0b0000_1000; // Middle left
+        const MR = 0b0001_0000; // Middle right
+        const BL = 0b0010_0000; // Bottom left
+        const BM = 0b0100_0000; // Bottom middle
+        const BR = 0b1000_0000; // Bottom right
     }
 }
 
@@ -283,7 +283,7 @@ const TEXT_OFFSETS: [(u32, u32); 256] = [
     (16, 1),
     (16, 1),
     (0, 0),
-    (2, 0),
+    (0, 0),
     (0, 1),
     (0, 1),
     (1, 0),
